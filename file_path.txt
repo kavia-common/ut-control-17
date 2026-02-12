@@ -1,0 +1,6 @@
+openssl.pc=/usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc
+libssl.a=/usr/lib/x86_64-linux-gnu/libssl.a
+libcrypto.a=/usr/lib/x86_64-linux-gnu/libcrypto.a
+openssl.pc=/usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc
+libssl.a=/usr/lib/x86_64-linux-gnu/libssl.a
+libcrypto.a=/usr/lib/x86_64-linux-gnu/libcrypto.a
