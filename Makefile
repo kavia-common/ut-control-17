@@ -59,6 +59,13 @@ INC_DIRS += $(ASPRINTF_DIR)
 # LIBFYAML Requirements
 XLDFLAGS += -pthread
 
+# Brotli Requirements (Linux)
+# libut_control.so may pull Brotli decoder symbols indirectly (e.g., via static libs),
+# so ensure the final shared library is linked with the Brotli decoder libraries.
+ifeq ($(TARGET),linux)
+XLDFLAGS += -lbrotlidec -lbrotlicommon
+endif
+
 # LIBWEBSOCKETS Requirements
 LIBWEBSOCKETS_DIR = $(FRAMEWORK_BUILD_DIR)/libwebsockets
 INC_DIRS += $(LIBWEBSOCKETS_DIR)/include
