@@ -28,6 +28,16 @@ extern "C"
 {
 #endif
 
+/*
+ * Variable naming standard (from CODING_GUIDELINES.docx)
+ * - Use one consistent naming style across the repo; prefer descriptive names.
+ * - Use unit suffixes where applicable (e.g., maxLenChars, timeoutMs, sizeBytes).
+ * - Prefer positive boolean names (isX/hasX/shouldX).
+ * - Avoid shadowing variables in inner scopes.
+ *
+ * Note: Existing public API names are preserved; apply these rules to new code.
+ */
+
 #define UT_LOG_MAX_LINE_SIZE (255) /**!< Max string size displayed by `UT_LOG`. */
 #define UT_LOG_MAX_PATH      (260) /**!< Default maximum path length. */
 
