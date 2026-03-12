@@ -1,0 +1,8 @@
+hdmicec:
+  meta:
+    schemaVersion: 1
+    requestId: "seed-la0"
+    source: "ut-control-17/tests/websocket-clients"
+  op: "addLogicalAddresses"
+  args:
+    addresses: [0]
