@@ -64,3 +64,4 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+.file_activity_report.json
