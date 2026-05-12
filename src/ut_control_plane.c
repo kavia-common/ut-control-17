@@ -60,6 +60,7 @@ typedef struct
 typedef struct
 {
     uint32_t magic;
+    uint32_t effective_port;
     struct lws_context_creation_info info;
     struct lws_context *context;
     struct lws *wsi;
@@ -92,6 +93,17 @@ struct per_session_data__http {
 };
 #endif
 static ut_cp_instance_internal_t *validateCPInstance(ut_controlPlane_instance_t *pInstance);
+
+// PUBLIC_INTERFACE
+uint32_t UT_ControlPlane_GetPort(ut_controlPlane_instance_t *pInstance)
+{
+    ut_cp_instance_internal_t *pInternal = validateCPInstance(pInstance);
+    if (pInternal == NULL)
+    {
+        return 0;
+    }
+    return pInternal->effective_port;
+}
 
 /* Local Fucntions*/
 static void enqueue_message(cp_message_t *data, ut_cp_instance_internal_t *pInternal )
@@ -400,13 +412,6 @@ ut_controlPlane_instance_t *UT_ControlPlane_Init( uint32_t monitorPort )
 {
     ut_cp_instance_internal_t *pInstance;
 
-    if ( monitorPort == 0 )
-    {
-        //assert( pInstance != NULL );
-        UT_CONTROL_PLANE_ERROR("port cannot be 0\n");
-        return NULL;
-    }
-
     pInstance = malloc(sizeof(ut_cp_instance_internal_t));
     memset(pInstance, 0, sizeof(ut_cp_instance_internal_t));
 
@@ -433,6 +438,14 @@ ut_controlPlane_instance_t *UT_ControlPlane_Init( uint32_t monitorPort )
         UT_CONTROL_PLANE_ERROR("Error creating libwebsockets context\n");
         free( pInstance );
         return NULL;
+    }
+
+    /* If monitorPort==0, libwebsockets chooses an ephemeral port. */
+    pInstance->effective_port = lws_get_listen_port(pInstance->context);
+    if (pInstance->effective_port == 0)
+    {
+        /* Best-effort: keep running even if we cannot discover it, but log it. */
+        UT_CONTROL_PLANE_ERROR("Failed to determine effective listen port (monitorPort=%u)\n", monitorPort);
     }
 
     pInstance->exit_request = false;

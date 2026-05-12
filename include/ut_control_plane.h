@@ -78,6 +78,19 @@ typedef void ut_controlPlane_instance_t; /*!< Handle to a control plane instance
  */
 typedef void (*ut_control_callback_t)(char *key, ut_kvp_instance_t *instance, void *userData);
 
+// PUBLIC_INTERFACE
+/**
+ * @brief Get the TCP port the control-plane server is currently bound to.
+ *
+ * This is primarily useful when the control plane is initialized with
+ * `monitorPort == 0` (ephemeral bind). After successful init, the effective
+ * bound port can be queried with this function for logging and orchestration.
+ *
+ * @param pInstance Handle to the control plane instance.
+ * @return Bound TCP port on success; 0 on error (e.g., invalid handle).
+ */
+uint32_t UT_ControlPlane_GetPort(ut_controlPlane_instance_t *pInstance);
+
 /**
  * @brief Initializes a control plane instance.
  * @param monitorPort - Port number to monitor for incoming messages.
