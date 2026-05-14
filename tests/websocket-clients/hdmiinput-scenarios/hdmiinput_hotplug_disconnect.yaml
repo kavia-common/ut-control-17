@@ -1,0 +1,6 @@
+hdmiinput:
+  command: connection_status
+  description: Simulate HDMI source unplug / disconnect on a given port.
+  params:
+    port: 0
+    connected: false

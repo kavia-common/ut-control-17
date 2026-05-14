@@ -1,0 +1,6 @@
+hdmiinput:
+  command: signal_status
+  description: Simulate transient unstable signal (e.g., during resolution/refresh change).
+  params:
+    port: 0
+    state: UNSTABLE

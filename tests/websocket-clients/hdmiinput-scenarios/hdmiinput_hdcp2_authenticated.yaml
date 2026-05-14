@@ -1,0 +1,7 @@
+hdmiinput:
+  command: hdcp_status
+  description: Simulate HDCP 2.x authenticated state.
+  params:
+    port: 0
+    state: AUTHENTICATED
+    version: VERSION_2_X

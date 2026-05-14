@@ -1,0 +1,6 @@
+hdmiinput:
+  command: connection_status
+  description: Simulate HDMI source hotplug connect on a given port.
+  params:
+    port: 0
+    connected: true

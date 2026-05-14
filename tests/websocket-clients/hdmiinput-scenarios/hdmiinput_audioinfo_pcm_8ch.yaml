@@ -1,0 +1,6 @@
+hdmiinput:
+  command: audioinfo_frame
+  description: Simulate audio format advertised as PCM 8-channel (example; update data bytes as needed by your parser/spec).
+  params:
+    port: 0
+    data: [0x84, 0x01, 0x0A, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]

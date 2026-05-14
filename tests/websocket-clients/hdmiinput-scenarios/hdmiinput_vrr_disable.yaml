@@ -1,0 +1,9 @@
+hdmiinput:
+  command: vrr_status
+  description: Simulate source disabling VRR.
+  params:
+    port: 0
+    vrrActive: false
+    M_CONST: false
+    fastVActive: false
+    frameRate: 60.0

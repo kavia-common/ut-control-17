@@ -1,3 +1,11 @@
+# Example YAML payloads
+#
+# This file is intentionally simple and generic. For HDMI Input simulation scenario templates,
+# see:
+#   ./hdmiinput-scenarios/*.yaml
+#
+# You can set `file_name` in python-client-send-yaml.py to one of those scenario files and send it.
+
 ---
 test1:
   yamlData: somevalue

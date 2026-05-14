@@ -1,0 +1,7 @@
+hdmiinput:
+  command: hdcp_status
+  description: Simulate HDCP authentication failure (e.g., key exchange failure).
+  params:
+    port: 0
+    state: AUTHENTICATION_FAILURE
+    version: VERSION_2_X

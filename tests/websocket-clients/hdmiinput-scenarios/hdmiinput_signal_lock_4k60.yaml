@@ -1,0 +1,6 @@
+hdmiinput:
+  command: signal_status
+  description: Simulate stable locked signal after 4K mode is set.
+  params:
+    port: 0
+    state: LOCKED

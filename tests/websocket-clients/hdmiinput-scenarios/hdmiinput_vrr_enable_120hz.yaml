@@ -1,0 +1,9 @@
+hdmiinput:
+  command: vrr_status
+  description: Simulate a gaming source enabling VRR at high refresh.
+  params:
+    port: 0
+    vrrActive: true
+    M_CONST: true
+    fastVActive: true
+    frameRate: 120.0

@@ -1,0 +1,6 @@
+hdmiinput:
+  command: videoformat_change
+  description: Simulate source output mode set to 1080p60 (VIC16).
+  params:
+    port: 0
+    format: VIC16_1920_1080_P_60_16_9

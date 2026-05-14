@@ -1,0 +1,7 @@
+hdmiinput:
+  command: hdcp_status
+  description: Simulate HDCP authentication in progress.
+  params:
+    port: 0
+    state: AUTHENTICATION_IN_PROGRESS
+    version: VERSION_2_X

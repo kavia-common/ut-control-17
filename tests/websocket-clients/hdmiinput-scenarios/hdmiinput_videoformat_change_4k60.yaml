@@ -1,0 +1,6 @@
+hdmiinput:
+  command: videoformat_change
+  description: Simulate source output mode change to 4Kp60 (example VIC; adjust to match platform support).
+  params:
+    port: 0
+    format: VIC97_3840_2160_P_60_16_9
