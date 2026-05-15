@@ -110,7 +110,10 @@ ifeq ($(TARGET),linux)
 CC := gcc -ggdb -o0 -Wall
 endif
 
-SRCS := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s)
+# Some SRC_DIRS are created by ./configure.sh on the first build; filter out
+# non-existent directories to avoid noisy `find: ... No such file or directory`.
+EXISTING_SRC_DIRS := $(foreach d,$(SRC_DIRS),$(if $(wildcard $(d)),$(d),))
+SRCS := $(shell find $(EXISTING_SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s)
 
 #OBJS := $(SRCS:.c=.o)
 OBJS := $(subst $(TOP_DIR),$(BUILD_DIR),$(SRCS:.c=.o))
