@@ -97,13 +97,16 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      */
     gKVP_ProfileInstance = inst;
     /*
-     * If linked, also mirror to the legacy global used by older callers.
-     * For weak symbols, the symbol evaluates to NULL when not present.
+     * Best-effort mirror to the legacy global used by older callers.
+     *
+     * Important:
+     * - Our correctness must NOT depend on this symbol being present.
+     * - When gKVP_Instance is a weak symbol, some link models may omit it.
+     *   In that case, we simply keep our internal singleton as the source of truth.
      */
 #if defined(__GNUC__) || defined(__clang__)
-    if (gKVP_Instance || inst)
+    if (&gKVP_Instance)
     {
-        /* If the symbol is present, assignment is safe. If not, gKVP_Instance is NULL and write is skipped by linker. */
         gKVP_Instance = inst;
     }
 #else
@@ -121,7 +124,7 @@ static void destroyCurrentSingleton(void)
 
     /* Always clear legacy global as well. */
 #if defined(__GNUC__) || defined(__clang__)
-    if (gKVP_Instance)
+    if (&gKVP_Instance)
     {
         gKVP_Instance = NULL;
     }
@@ -302,12 +305,23 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     /*
      * If someone initialized the legacy global directly (outside this module),
      * adopt it so we can still serve a valid instance.
+     *
+     * This is best-effort only; the singleton must remain correct even if the
+     * legacy symbol is absent due to link-time stripping.
      */
+#if defined(__GNUC__) || defined(__clang__)
+    if (&gKVP_Instance && gKVP_Instance)
+    {
+        gKVP_ProfileInstance = gKVP_Instance;
+        return gKVP_ProfileInstance;
+    }
+#else
     if (gKVP_Instance)
     {
         gKVP_ProfileInstance = gKVP_Instance;
         return gKVP_ProfileInstance;
     }
+#endif
 
     UT_LOG_DEBUG("ut_kvp_profile_getInstance: singleton not initialized; attempting auto-load");
 
