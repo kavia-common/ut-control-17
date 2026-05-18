@@ -25,22 +25,6 @@
 #include <ut_log.h>
 
 /*
- * Legacy global instance symbol defined in ut_kvp.c.
- *
- * IMPORTANT robustness note (VTS / mixed-linkage environments):
- * Some harnesses link ut_kvp_profile.* and ut_kvp.* in ways where the data
- * symbol `gKVP_Instance` is not reliably shared (e.g., duplicated across DSOs).
- * That can lead to a profile instance pointer that is valid in one module but
- * appears NULL/invalid in the module that runs validateInstance(), resulting in
- * "Invalid Handle".
- *
- * Therefore, this module must be correct even if gKVP_Instance is not usable.
- * We still mirror to it when possible for backward compatibility, but never
- * depend on it for validity.
- */
-extern ut_kvp_instance_t *gKVP_Instance;
-
-/*
  * Internal singleton instance pointer owned by this TU.
  * This is the canonical instance for ut_kvp_profile_* APIs.
  */
@@ -98,12 +82,6 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      * to the legacy global. This reduces the risk of the two getting out-of-sync.
      */
     gKVP_ProfileInstance = inst;
-    /*
-     * Best-effort mirror only. Even if gKVP_Instance is a different data symbol
-     * in another linkage unit, our TU-local singleton remains the canonical
-     * instance returned by ut_kvp_profile_getInstance().
-     */
-    gKVP_Instance = inst;
 }
 
 static void destroyCurrentSingleton(void)
@@ -113,9 +91,6 @@ static void destroyCurrentSingleton(void)
         ut_kvp_destroyInstance(gKVP_ProfileInstance);
         gKVP_ProfileInstance = NULL;
     }
-
-    /* Always clear legacy global as well. */
-    gKVP_Instance = NULL;
 }
 
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
