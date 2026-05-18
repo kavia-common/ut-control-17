@@ -96,10 +96,19 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      * to the legacy global. This reduces the risk of the two getting out-of-sync.
      */
     gKVP_ProfileInstance = inst;
-    if (&gKVP_Instance)
+    /*
+     * If linked, also mirror to the legacy global used by older callers.
+     * For weak symbols, the symbol evaluates to NULL when not present.
+     */
+#if defined(__GNUC__) || defined(__clang__)
+    if (gKVP_Instance || inst)
     {
+        /* If the symbol is present, assignment is safe. If not, gKVP_Instance is NULL and write is skipped by linker. */
         gKVP_Instance = inst;
     }
+#else
+    gKVP_Instance = inst;
+#endif
 }
 
 static void destroyCurrentSingleton(void)
@@ -111,10 +120,14 @@ static void destroyCurrentSingleton(void)
     }
 
     /* Always clear legacy global as well. */
-    if (&gKVP_Instance)
+#if defined(__GNUC__) || defined(__clang__)
+    if (gKVP_Instance)
     {
         gKVP_Instance = NULL;
     }
+#else
+    gKVP_Instance = NULL;
+#endif
 }
 
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
@@ -290,7 +303,7 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
      * If someone initialized the legacy global directly (outside this module),
      * adopt it so we can still serve a valid instance.
      */
-    if (&gKVP_Instance && gKVP_Instance)
+    if (gKVP_Instance)
     {
         gKVP_ProfileInstance = gKVP_Instance;
         return gKVP_ProfileInstance;
