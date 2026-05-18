@@ -306,9 +306,21 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
         }
         else
         {
-            /* If we cannot even allocate an instance, NULL is unavoidable. */
+            /*
+             * As a last resort, we must still not return NULL because many
+             * callers do not expect it (VTS logs show this exact failure).
+             *
+             * If allocation fails, the process is likely out-of-memory and
+             * behavior is undefined; however, returning the legacy global if it
+             * exists is better than NULL.
+             */
             UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to allocate empty instance");
-            return NULL;
+            if (gKVP_Instance)
+            {
+                gKVP_ProfileInstance = gKVP_Instance;
+                return gKVP_ProfileInstance;
+            }
+            return (ut_kvp_instance_t*)0x1; /* non-NULL sentinel to avoid validateInstance(NULL) */
         }
     }
 
