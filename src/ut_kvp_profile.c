@@ -291,38 +291,17 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     UT_LOG_DEBUG("ut_kvp_profile_getInstance: singleton not initialized; attempting auto-load");
 
     /*
-     * Guarantee a non-NULL, magic-valid instance even if all loading fails.
-     *
-     * Some harnesses treat a NULL instance as a hard failure and will spam
-     * "Invalid Handle" logs. Returning a valid (even if empty) instance allows
-     * callers to distinguish "no data" vs "bad handle", and avoids NULL-deref
-     * patterns in external code.
+     * Create an instance early so the handle is always magic-valid.
+     * IMPORTANT: Never return a fake/sentinel pointer; ut_kvp validates the
+     * instance magic and will emit "Invalid Handle" (as seen in the VTS log).
      */
+    ut_kvp_instance_t* emptyInst = ut_kvp_createInstance();
+    if (!emptyInst)
     {
-        ut_kvp_instance_t* emptyInst = ut_kvp_createInstance();
-        if (emptyInst)
-        {
-            setSingletonInstance(emptyInst);
-        }
-        else
-        {
-            /*
-             * As a last resort, we must still not return NULL because many
-             * callers do not expect it (VTS logs show this exact failure).
-             *
-             * If allocation fails, the process is likely out-of-memory and
-             * behavior is undefined; however, returning the legacy global if it
-             * exists is better than NULL.
-             */
-            UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to allocate empty instance");
-            if (gKVP_Instance)
-            {
-                gKVP_ProfileInstance = gKVP_Instance;
-                return gKVP_ProfileInstance;
-            }
-            return (ut_kvp_instance_t*)0x1; /* non-NULL sentinel to avoid validateInstance(NULL) */
-        }
+        UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to allocate instance (OOM)");
+        return NULL;
     }
+    setSingletonInstance(emptyInst);
 
     /*
      * Lazy-load from env if available. This prevents common "Invalid Handle"
