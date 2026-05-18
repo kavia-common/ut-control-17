@@ -12,6 +12,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <ut_log.h>
 
@@ -107,6 +108,38 @@ static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
 
 static ut_kvp_status_t tryLoadFromDefaultPaths(void)
 {
+    char exePath[1024] = {0};
+    char exeDir[1024] = {0};
+    ssize_t exeLen = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    if (exeLen > 0)
+    {
+        exePath[exeLen] = '\0';
+        // Derive directory in-place (no libgen dependency).
+        strncpy(exeDir, exePath, sizeof(exeDir) - 1);
+        exeDir[sizeof(exeDir) - 1] = '\0';
+        char *lastSlash = strrchr(exeDir, '/');
+        if (lastSlash)
+        {
+            *lastSlash = '\0';
+        }
+        else
+        {
+            exeDir[0] = '\0';
+        }
+    }
+
+    char exeProfile1[1200] = {0};
+    char exeProfile2[1200] = {0};
+    char exeProfile3[1200] = {0};
+    char exeProfile4[1200] = {0};
+    if (exeDir[0] != '\0')
+    {
+        snprintf(exeProfile1, sizeof(exeProfile1), "%s/%s", exeDir, "profile.yaml");
+        snprintf(exeProfile2, sizeof(exeProfile2), "%s/%s", exeDir, "ut_kvp_profile.yaml");
+        snprintf(exeProfile3, sizeof(exeProfile3), "%s/%s", exeDir, "assets/profile.yaml");
+        snprintf(exeProfile4, sizeof(exeProfile4), "%s/%s", exeDir, "assets/ut_kvp_profile.yaml");
+    }
+
     // Common locations used by various test harnesses when env vars are not propagated.
     static const char* kDefaultPaths[] = {
         "profile.yaml",
@@ -124,6 +157,25 @@ static ut_kvp_status_t tryLoadFromDefaultPaths(void)
         "tests/src/assets/config-test.yaml",
         "tests/assets/config-test.yaml",
     };
+
+    // First: try alongside the running binary (typical for VTS packaging).
+    if (exeDir[0] != '\0')
+    {
+        const char *exeCandidates[] = { exeProfile1, exeProfile2, exeProfile3, exeProfile4 };
+        for (size_t i = 0; i < sizeof(exeCandidates) / sizeof(exeCandidates[0]); ++i)
+        {
+            if (!exeCandidates[i] || exeCandidates[i][0] == '\0')
+            {
+                continue;
+            }
+            ut_kvp_status_t st = ut_kvp_profile_loadFromFile(exeCandidates[i]);
+            if (st == UT_KVP_STATUS_SUCCESS)
+            {
+                UT_LOG_DEBUG("ut_kvp_profile_getInstance: auto-loaded profile from exe-relative path '%s'", exeCandidates[i]);
+                return st;
+            }
+        }
+    }
 
     for (size_t i = 0; i < sizeof(kDefaultPaths) / sizeof(kDefaultPaths[0]); ++i)
     {
@@ -187,6 +239,8 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     {
         return gKVP_Instance;
     }
+
+    UT_LOG_DEBUG("ut_kvp_profile_getInstance: singleton not initialized; attempting auto-load");
 
     // Lazy-load from env if available. This prevents common "Invalid Handle"
     // failures in integration tests that expect the singleton to exist.
