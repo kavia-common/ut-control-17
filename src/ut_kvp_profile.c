@@ -31,6 +31,14 @@
 static ut_kvp_instance_t *gKVP_ProfileInstance = NULL;
 
 /*
+ * Legacy global instance (defined weakly in ut_kvp.c).
+ * Some harnesses/DSO layouts still reference this symbol rather than calling
+ * ut_kvp_profile_getInstance() everywhere; keep it in sync with the profile
+ * singleton to ensure a single, magic-valid handle is observed process-wide.
+ */
+extern ut_kvp_instance_t *gKVP_Instance;
+
+/*
  * NOTE:
  * We must not duplicate ut_kvp.c's internal instance struct here.
  * In some link/DSO layouts (e.g., VTS), mixing different internal layouts
@@ -100,11 +108,12 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      * Single point of truth for updating our internal singleton.
      *
      * IMPORTANT (VTS/linkage robustness):
-     * Do NOT attempt to mirror into ut_kvp.c's legacy weak global (gKVP_Instance).
-     * In some harness/link models multiple copies of that weak symbol may exist,
-     * and writing to it here is not guaranteed to affect the caller's view.
+     * Keep the legacy weak global in sync anyway. While multiple copies can
+     * exist in some link models, updating it here is still the best available
+     * compatibility strategy for code that consults gKVP_Instance directly.
      */
     gKVP_ProfileInstance = inst;
+    gKVP_Instance = inst;
 }
 
 static void destroyCurrentSingleton(void)
@@ -113,6 +122,8 @@ static void destroyCurrentSingleton(void)
     {
         ut_kvp_destroyInstance(gKVP_ProfileInstance);
         gKVP_ProfileInstance = NULL;
+        if (gKVP_Instance)
+            gKVP_Instance = NULL;
     }
 }
 
