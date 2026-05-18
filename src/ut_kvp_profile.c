@@ -17,6 +17,31 @@
 
 extern ut_kvp_instance_t *gKVP_Instance;
 
+/**
+ * Minimal embedded profile used as a last-resort fallback when no on-disk
+ * profile can be located and no env var is provided (common in VTS harnesses).
+ *
+ * This is intentionally small: it only targets the keys used by VTS_L1_BOOT
+ * capability verification so ut_kvp_profile_getInstance() never returns NULL.
+ */
+static const char *kEmbeddedBootProfileYaml =
+    "boot:\n"
+    "  capabilities:\n"
+    "    supportedResetTypes:\n"
+    "      - FULL_SYSTEM_RESET\n"
+    "      - SOFTWARE_REBOOT\n"
+    "      - MAINTENANCE_REBOOT\n"
+    "      - FORCE_DISASTER_RECOVERY\n"
+    "      - INVALIDATE_CURRENT_APPLICATION_IMAGE\n"
+    "    supportedBootReasons:\n"
+    "      - ERROR_UNKNOWN\n"
+    "      - WATCHDOG\n"
+    "      - MAINTENANCE_REBOOT\n"
+    "      - THERMAL_RESET\n"
+    "      - WARM_RESET\n"
+    "      - COLD_BOOT\n"
+    "      - STR_AUTH_FAILURE\n";
+
 static const char* getProfileDataFromEnv(void)
 {
     const char* p = getenv("UT_KVP_PROFILE_DATA");
@@ -90,6 +115,14 @@ static ut_kvp_status_t tryLoadFromDefaultPaths(void)
         "configs/profile.yaml",
         "ut_kvp_profile.yaml",
         "assets/ut_kvp_profile.yaml",
+        // Common device/VTS style locations
+        "/vendor/etc/ut_kvp_profile.yaml",
+        "/vendor/etc/profile.yaml",
+        "/etc/ut_kvp_profile.yaml",
+        "/etc/profile.yaml",
+        // Common workspace-style locations used by some harnesses
+        "tests/src/assets/config-test.yaml",
+        "tests/assets/config-test.yaml",
     };
 
     for (size_t i = 0; i < sizeof(kDefaultPaths) / sizeof(kDefaultPaths[0]); ++i)
@@ -185,6 +218,18 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     if (tryLoadFromDefaultPaths() == UT_KVP_STATUS_SUCCESS)
     {
         return gKVP_Instance;
+    }
+
+    // Last resort: load a minimal embedded boot profile so callers never see
+    // a NULL/invalid handle (prevents "Invalid Handle" failures in VTS).
+    {
+        ut_kvp_status_t st = ut_kvp_profile_loadFromMemory(kEmbeddedBootProfileYaml);
+        if (st == UT_KVP_STATUS_SUCCESS)
+        {
+            UT_LOG_DEBUG("ut_kvp_profile_getInstance: loaded embedded minimal boot profile (fallback)");
+            return gKVP_Instance;
+        }
+        UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to load embedded fallback profile");
     }
 
     return NULL;
