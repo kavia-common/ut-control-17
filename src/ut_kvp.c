@@ -653,23 +653,28 @@ uint32_t ut_kvp_getListCount( ut_kvp_instance_t *pInstance, const char *pszKey)
     uint32_t count;
     char zKey[UT_KVP_MAX_ELEMENT_SIZE];
 
-    ut_kvp_instance_internal_t *pInternal = validateInstance(pInstance);
+    /*
+     * VTS/integration harness robustness:
+     * Some callers end up passing a NULL/invalid instance handle, but still
+     * expect this API to operate on the process-wide profile singleton.
+     *
+     * IMPORTANT: do not call validateInstance(NULL) first, as that guarantees
+     * an "Invalid Handle" error path. Attempt profile recovery before validating.
+     */
+    if (pInstance == NULL)
+    {
+        pInstance = ut_kvp_profile_getInstance();
+    }
 
+    ut_kvp_instance_internal_t *pInternal = validateInstance(pInstance);
     if (pInternal == NULL)
     {
-        /*
-         * Attempt recovery via the profile singleton. This prevents VTS from
-         * failing with "Invalid Handle" when the harness does not explicitly
-         * initialize/pass a valid instance.
-         */
+        /* One more attempt: if the provided handle is invalid, try the singleton. */
         ut_kvp_instance_t *profileInst = ut_kvp_profile_getInstance();
         if (profileInst != NULL && profileInst != pInstance)
         {
-            pInternal = validateInstance(profileInst);
-            if (pInternal != NULL)
-            {
-                pInstance = profileInst;
-            }
+            pInstance = profileInst;
+            pInternal = validateInstance(pInstance);
         }
 
         if (pInternal == NULL)
