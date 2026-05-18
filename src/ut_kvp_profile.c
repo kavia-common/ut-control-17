@@ -40,6 +40,23 @@ extern ut_kvp_instance_t *gKVP_Instance;
  */
 static ut_kvp_instance_t *gKVP_ProfileInstance = NULL;
 
+/* Keep in sync with ut_kvp.c */
+#define UT_KVP_MAGIC (0xdeadbeef)
+
+typedef struct
+{
+    uint32_t magic;
+    void *fy_handle;
+} ut_kvp_instance_internal_t;
+
+static bool isValidKvpInstanceNoLog(ut_kvp_instance_t *inst)
+{
+    if (inst == NULL)
+        return false;
+    const ut_kvp_instance_internal_t *p = (const ut_kvp_instance_internal_t *)inst;
+    return (p->magic == UT_KVP_MAGIC);
+}
+
 /**
  * Minimal embedded profile used as a last-resort fallback when no on-disk
  * profile can be located and no env var is provided (common in VTS harnesses).
@@ -272,6 +289,21 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     /* Prefer internal singleton first. */
     if (gKVP_ProfileInstance)
     {
+        return gKVP_ProfileInstance;
+    }
+
+    /*
+     * Compatibility: if the legacy global was already initialized elsewhere in
+     * the process (some harnesses do this), reuse it as our singleton.
+     *
+     * This directly addresses VTS logs showing:
+     *  - ut_kvp_getListCount(ut_kvp_profile_getInstance(), ...) => Invalid Handle
+     * by ensuring getInstance never returns a NULL/invalid handle when a valid
+     * legacy instance exists.
+     */
+    if (isValidKvpInstanceNoLog(gKVP_Instance))
+    {
+        gKVP_ProfileInstance = gKVP_Instance;
         return gKVP_ProfileInstance;
     }
 

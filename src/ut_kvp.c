@@ -54,6 +54,23 @@ typedef struct
     struct fy_document *fy_handle;
 } ut_kvp_instance_internal_t;
 
+/*
+ * Safe validation helper:
+ * - Does not log (unlike validateInstance()).
+ * - Avoids dereferencing invalid pointers.
+ *
+ * This is used to decide whether we should fall back to the profile singleton
+ * without spamming "Invalid Handle" in integration/VTS logs.
+ */
+static bool isInstanceValidNoLog(ut_kvp_instance_t *pInstance)
+{
+    if (pInstance == NULL)
+        return false;
+
+    ut_kvp_instance_internal_t *pInternal = (ut_kvp_instance_internal_t *)pInstance;
+    return (pInternal->magic == UT_KVP_MAGIC);
+}
+
 // Struct to store the downloaded data
 typedef struct
 {
@@ -661,7 +678,7 @@ uint32_t ut_kvp_getListCount( ut_kvp_instance_t *pInstance, const char *pszKey)
      * IMPORTANT: do not call validateInstance(NULL) first, as that guarantees
      * an "Invalid Handle" error path. Attempt profile recovery before validating.
      */
-    if (pInstance == NULL)
+    if (!isInstanceValidNoLog(pInstance))
     {
         pInstance = ut_kvp_profile_getInstance();
     }
@@ -669,19 +686,8 @@ uint32_t ut_kvp_getListCount( ut_kvp_instance_t *pInstance, const char *pszKey)
     ut_kvp_instance_internal_t *pInternal = validateInstance(pInstance);
     if (pInternal == NULL)
     {
-        /* One more attempt: if the provided handle is invalid, try the singleton. */
-        ut_kvp_instance_t *profileInst = ut_kvp_profile_getInstance();
-        if (profileInst != NULL && profileInst != pInstance)
-        {
-            pInstance = profileInst;
-            pInternal = validateInstance(pInstance);
-        }
-
-        if (pInternal == NULL)
-        {
-            UT_LOG_ERROR("Invalid instance - pInstance");
-            return 0;
-        }
+        UT_LOG_ERROR("Invalid instance - pInstance");
+        return 0;
     }
 
     if (pszKey == NULL)
