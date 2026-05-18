@@ -25,6 +25,16 @@
 #include <ut_log.h>
 
 /*
+ * Legacy global from ut_kvp.c.
+ *
+ * Some harnesses historically rely on this symbol rather than consistently
+ * using ut_kvp_profile_getInstance(). In certain linkage models (notably VTS),
+ * failing to keep this in sync can result in NULL/invalid handles being used,
+ * triggering "Invalid Handle" and listCount==0 failures.
+ */
+extern ut_kvp_instance_t *gKVP_Instance;
+
+/*
  * Internal singleton instance pointer owned by this TU.
  * This is the canonical instance for ut_kvp_profile_* APIs.
  */
@@ -82,6 +92,7 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      * to the legacy global. This reduces the risk of the two getting out-of-sync.
      */
     gKVP_ProfileInstance = inst;
+    gKVP_Instance = inst;
 }
 
 static void destroyCurrentSingleton(void)
@@ -91,6 +102,8 @@ static void destroyCurrentSingleton(void)
         ut_kvp_destroyInstance(gKVP_ProfileInstance);
         gKVP_ProfileInstance = NULL;
     }
+    /* Ensure legacy global never points at freed memory. */
+    gKVP_Instance = NULL;
 }
 
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
