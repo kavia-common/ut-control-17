@@ -27,12 +27,16 @@
 /*
  * Legacy global instance symbol defined in ut_kvp.c.
  *
- * A number of harnesses (including VTS) call ut_kvp_getListCount() using
- * ut_kvp_profile_getInstance() and/or directly use the legacy global instance.
- * To keep behavior consistent across translation units, we must keep the two
- * pointers in sync in *all* toolchains (including Clang).
+ * IMPORTANT robustness note (VTS / mixed-linkage environments):
+ * Some harnesses link ut_kvp_profile.* and ut_kvp.* in ways where the data
+ * symbol `gKVP_Instance` is not reliably shared (e.g., duplicated across DSOs).
+ * That can lead to a profile instance pointer that is valid in one module but
+ * appears NULL/invalid in the module that runs validateInstance(), resulting in
+ * "Invalid Handle".
  *
- * Note: gKVP_Instance is a normal extern data symbol in ut_kvp.c, not weak.
+ * Therefore, this module must be correct even if gKVP_Instance is not usable.
+ * We still mirror to it when possible for backward compatibility, but never
+ * depend on it for validity.
  */
 extern ut_kvp_instance_t *gKVP_Instance;
 
@@ -94,6 +98,11 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      * to the legacy global. This reduces the risk of the two getting out-of-sync.
      */
     gKVP_ProfileInstance = inst;
+    /*
+     * Best-effort mirror only. Even if gKVP_Instance is a different data symbol
+     * in another linkage unit, our TU-local singleton remains the canonical
+     * instance returned by ut_kvp_profile_getInstance().
+     */
     gKVP_Instance = inst;
 }
 
@@ -275,16 +284,6 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     /* Prefer internal singleton first. */
     if (gKVP_ProfileInstance)
     {
-        return gKVP_ProfileInstance;
-    }
-
-    /*
-     * If someone initialized the legacy global directly (outside this module),
-     * adopt it.
-     */
-    if (gKVP_Instance)
-    {
-        gKVP_ProfileInstance = gKVP_Instance;
         return gKVP_ProfileInstance;
     }
 
