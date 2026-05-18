@@ -27,18 +27,14 @@
 /*
  * Legacy global instance symbol defined in ut_kvp.c.
  *
- * Some harnesses link with aggressive dead-stripping and/or different linkage
- * models (e.g., VTS). In those cases, relying on a weak extern data symbol is
- * fragile: you cannot safely detect “symbol present but currently NULL” vs
- * “symbol absent”, and writing through the reference can be undefined.
+ * A number of harnesses (including VTS) call ut_kvp_getListCount() using
+ * ut_kvp_profile_getInstance() and/or directly use the legacy global instance.
+ * To keep behavior consistent across translation units, we must keep the two
+ * pointers in sync in *all* toolchains (including Clang).
  *
- * Therefore, this module’s correctness must not depend on gKVP_Instance.
- * We keep the declaration only for non-weak builds where the symbol is known
- * to be present and writable.
+ * Note: gKVP_Instance is a normal extern data symbol in ut_kvp.c, not weak.
  */
-#if !defined(__GNUC__) && !defined(__clang__)
 extern ut_kvp_instance_t *gKVP_Instance;
-#endif
 
 /*
  * Internal singleton instance pointer owned by this TU.
@@ -98,10 +94,7 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      * to the legacy global. This reduces the risk of the two getting out-of-sync.
      */
     gKVP_ProfileInstance = inst;
-#if !defined(__GNUC__) && !defined(__clang__)
-    /* Mirror to legacy global only when the symbol is guaranteed to exist. */
     gKVP_Instance = inst;
-#endif
 }
 
 static void destroyCurrentSingleton(void)
@@ -113,9 +106,7 @@ static void destroyCurrentSingleton(void)
     }
 
     /* Always clear legacy global as well. */
-#if !defined(__GNUC__) && !defined(__clang__)
     gKVP_Instance = NULL;
-#endif
 }
 
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
@@ -287,17 +278,15 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
         return gKVP_ProfileInstance;
     }
 
-#if !defined(__GNUC__) && !defined(__clang__)
     /*
      * If someone initialized the legacy global directly (outside this module),
-     * adopt it (only safe when symbol is guaranteed to exist).
+     * adopt it.
      */
     if (gKVP_Instance)
     {
         gKVP_ProfileInstance = gKVP_Instance;
         return gKVP_ProfileInstance;
     }
-#endif
 
     UT_LOG_DEBUG("ut_kvp_profile_getInstance: singleton not initialized; attempting auto-load");
 
