@@ -40,21 +40,23 @@ extern ut_kvp_instance_t *gKVP_Instance;
  */
 static ut_kvp_instance_t *gKVP_ProfileInstance = NULL;
 
-/* Keep in sync with ut_kvp.c */
-#define UT_KVP_MAGIC (0xdeadbeef)
-
-typedef struct
-{
-    uint32_t magic;
-    void *fy_handle;
-} ut_kvp_instance_internal_t;
-
+/*
+ * NOTE:
+ * We must not duplicate ut_kvp.c's internal instance struct here.
+ * In some link/DSO layouts (e.g., VTS), mixing different internal layouts
+ * would cause validateInstance() magic checks (and/or struct interpretation)
+ * to fail, producing "Invalid Handle".
+ *
+ * The only safe way to obtain a valid instance is via ut_kvp_createInstance()
+ * from ut_kvp.c, and to treat ut_kvp_instance_t as opaque here.
+ */
 static bool isValidKvpInstanceNoLog(ut_kvp_instance_t *inst)
 {
     if (inst == NULL)
         return false;
-    const ut_kvp_instance_internal_t *p = (const ut_kvp_instance_internal_t *)inst;
-    return (p->magic == UT_KVP_MAGIC);
+    /* Best-effort: magic is expected to be the first field (ut_kvp.c). */
+    const uint32_t *magic = (const uint32_t *)inst;
+    return (*magic == 0xdeadbeef);
 }
 
 /**
@@ -122,16 +124,6 @@ static void destroyCurrentSingleton(void)
     /* Ensure legacy global never points at freed memory. */
     gKVP_Instance = NULL;
 }
-
-/*
- * Emergency instance:
- * If malloc fails inside ut_kvp_profile_getInstance() we still must not return NULL
- * because VTS calls ut_kvp_getListCount(getInstance(), ...) and validateInstance()
- * will log "Invalid Handle" for NULL and fail the test early.
- *
- * This instance is magic-valid but has no data loaded; list counts will be 0.
- */
-static ut_kvp_instance_internal_t gEmergencyInstance = { UT_KVP_MAGIC, NULL };
 
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
 {
@@ -335,10 +327,12 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
             gKVP_ProfileInstance = gKVP_Instance;
             return gKVP_ProfileInstance;
         }
-
-        /* Last resort: return a magic-valid emergency instance (no data). */
-        setSingletonInstance((ut_kvp_instance_t *)&gEmergencyInstance);
-        return gKVP_ProfileInstance;
+        /*
+         * Last resort: return NULL. Callers like ut_kvp_getListCount() have
+         * their own recovery path to the profile singleton and will handle
+         * NULL safely (without dereferencing).
+         */
+        return NULL;
     }
     setSingletonInstance(emptyInst);
 

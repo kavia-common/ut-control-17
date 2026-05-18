@@ -688,13 +688,18 @@ uint32_t ut_kvp_getListCount( ut_kvp_instance_t *pInstance, const char *pszKey)
     {
         pInstance = ut_kvp_profile_getInstance();
     }
-
-    ut_kvp_instance_internal_t *pInternal = validateInstance(pInstance);
-    if (pInternal == NULL)
+    /*
+     * After attempting recovery via profile singleton, re-check validity using the
+     * no-log predicate to avoid validateInstance() logging "Invalid Handle" in the
+     * common NULL/invalid-handle case seen in VTS logs.
+     */
+    if (!isInstanceValidNoLog(pInstance))
     {
-        UT_LOG_ERROR("Invalid instance - pInstance");
+        UT_LOG_ERROR("Invalid instance - pInstance (after profile recovery)");
         return 0;
     }
+
+    ut_kvp_instance_internal_t *pInternal = (ut_kvp_instance_internal_t *)pInstance;
 
     if (pszKey == NULL)
     {
