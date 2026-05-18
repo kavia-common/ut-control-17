@@ -17,6 +17,16 @@
 
 extern ut_kvp_instance_t *gKVP_Instance;
 
+static const char* getProfileDataFromEnv(void)
+{
+    const char* p = getenv("UT_KVP_PROFILE_DATA");
+    if (p && p[0] != '\0')
+    {
+        return p;
+    }
+    return NULL;
+}
+
 static const char* getProfilePathFromEnv(void)
 {
     const char* p = getenv("UT_KVP_PROFILE_PATH");
@@ -25,6 +35,73 @@ static const char* getProfilePathFromEnv(void)
         return p;
     }
     return NULL;
+}
+
+static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
+{
+    if (!yamlData || yamlData[0] == '\0')
+    {
+        UT_LOG_ERROR("ut_kvp_profile_loadFromMemory: invalid yamlData");
+        return UT_KVP_STATUS_INVALID_PARAM;
+    }
+
+    ut_kvp_instance_t* inst = ut_kvp_createInstance();
+    if (!inst)
+    {
+        UT_LOG_ERROR("ut_kvp_profile_loadFromMemory: ut_kvp_createInstance failed");
+        return UT_KVP_STATUS_PARSING_ERROR;
+    }
+
+    // ut_kvp_openMemory takes mutable char*
+    char* mutableData = strdup(yamlData);
+    if (!mutableData)
+    {
+        ut_kvp_destroyInstance(inst);
+        return UT_KVP_STATUS_PARSING_ERROR;
+    }
+
+    ut_kvp_status_t st = ut_kvp_openMemory(inst, mutableData, (uint32_t)strlen(mutableData));
+    free(mutableData);
+
+    if (st != UT_KVP_STATUS_SUCCESS)
+    {
+        ut_kvp_destroyInstance(inst);
+        UT_LOG_ERROR("ut_kvp_profile_loadFromMemory: ut_kvp_openMemory failed");
+        return st;
+    }
+
+    if (gKVP_Instance)
+    {
+        ut_kvp_destroyInstance(gKVP_Instance);
+        gKVP_Instance = NULL;
+    }
+
+    gKVP_Instance = inst;
+    return UT_KVP_STATUS_SUCCESS;
+}
+
+static ut_kvp_status_t tryLoadFromDefaultPaths(void)
+{
+    // Common locations used by various test harnesses when env vars are not propagated.
+    static const char* kDefaultPaths[] = {
+        "profile.yaml",
+        "assets/profile.yaml",
+        "config/profile.yaml",
+        "configs/profile.yaml",
+        "ut_kvp_profile.yaml",
+        "assets/ut_kvp_profile.yaml",
+    };
+
+    for (size_t i = 0; i < sizeof(kDefaultPaths) / sizeof(kDefaultPaths[0]); ++i)
+    {
+        ut_kvp_status_t st = ut_kvp_profile_loadFromFile(kDefaultPaths[i]);
+        if (st == UT_KVP_STATUS_SUCCESS)
+        {
+            UT_LOG_DEBUG("ut_kvp_profile_getInstance: auto-loaded profile from default path '%s'", kDefaultPaths[i]);
+            return st;
+        }
+    }
+    return UT_KVP_STATUS_FILE_OPEN_ERROR;
 }
 
 ut_kvp_status_t ut_kvp_profile_loadFromFile(const char* filePath)
@@ -80,6 +157,17 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
 
     // Lazy-load from env if available. This prevents common "Invalid Handle"
     // failures in integration tests that expect the singleton to exist.
+    const char* envData = getProfileDataFromEnv();
+    if (envData)
+    {
+        ut_kvp_status_t st = ut_kvp_profile_loadFromMemory(envData);
+        if (st == UT_KVP_STATUS_SUCCESS)
+        {
+            return gKVP_Instance;
+        }
+        UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to auto-load UT_KVP_PROFILE_DATA");
+    }
+
     const char* envPath = getProfilePathFromEnv();
     if (envPath)
     {
@@ -89,6 +177,14 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
             return gKVP_Instance;
         }
         UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to auto-load UT_KVP_PROFILE_PATH='%s'", envPath);
+    }
+
+    // Final fallback: attempt a small set of conventional relative paths.
+    // This is intended for VTS/CI harnesses that ship the profile next to the test binary
+    // but do not propagate environment variables.
+    if (tryLoadFromDefaultPaths() == UT_KVP_STATUS_SUCCESS)
+    {
+        return gKVP_Instance;
     }
 
     return NULL;
