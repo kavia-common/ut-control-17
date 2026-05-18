@@ -106,12 +106,14 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      */
 #if defined(__GNUC__) || defined(__clang__)
     /*
-     * For weak externs, the symbol may resolve to NULL at runtime if not present.
-     * Writing via &gKVP_Instance is NOT a valid presence check (it's the address
-     * of our reference), so instead only mirror when the symbol itself is usable.
+     * For weak externs, the symbol may be absent (resolved to 0).
+     * If the symbol exists, we MUST keep it in sync even when its current value
+     * is NULL (that is the common initial state).
      */
-    if (gKVP_Instance != NULL || inst == NULL)
+    if (&gKVP_Instance)
+    {
         gKVP_Instance = inst;
+    }
 #else
     gKVP_Instance = inst;
 #endif
@@ -127,8 +129,10 @@ static void destroyCurrentSingleton(void)
 
     /* Always clear legacy global as well. */
 #if defined(__GNUC__) || defined(__clang__)
-    if (gKVP_Instance != NULL)
+    if (&gKVP_Instance)
+    {
         gKVP_Instance = NULL;
+    }
 #else
     gKVP_Instance = NULL;
 #endif
