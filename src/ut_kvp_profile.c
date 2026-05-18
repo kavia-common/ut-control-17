@@ -25,16 +25,6 @@
 #include <ut_log.h>
 
 /*
- * Legacy global from ut_kvp.c.
- *
- * Some harnesses historically rely on this symbol rather than consistently
- * using ut_kvp_profile_getInstance(). In certain linkage models (notably VTS),
- * failing to keep this in sync can result in NULL/invalid handles being used,
- * triggering "Invalid Handle" and listCount==0 failures.
- */
-extern ut_kvp_instance_t *gKVP_Instance;
-
-/*
  * Internal singleton instance pointer owned by this TU.
  * This is the canonical instance for ut_kvp_profile_* APIs.
  */
@@ -107,11 +97,14 @@ static const char* getProfilePathFromEnv(void)
 static void setSingletonInstance(ut_kvp_instance_t *inst)
 {
     /*
-     * Single point of truth for updating our internal singleton and mirroring
-     * to the legacy global. This reduces the risk of the two getting out-of-sync.
+     * Single point of truth for updating our internal singleton.
+     *
+     * IMPORTANT (VTS/linkage robustness):
+     * Do NOT attempt to mirror into ut_kvp.c's legacy weak global (gKVP_Instance).
+     * In some harness/link models multiple copies of that weak symbol may exist,
+     * and writing to it here is not guaranteed to affect the caller's view.
      */
     gKVP_ProfileInstance = inst;
-    gKVP_Instance = inst;
 }
 
 static void destroyCurrentSingleton(void)
@@ -121,8 +114,6 @@ static void destroyCurrentSingleton(void)
         ut_kvp_destroyInstance(gKVP_ProfileInstance);
         gKVP_ProfileInstance = NULL;
     }
-    /* Ensure legacy global never points at freed memory. */
-    gKVP_Instance = NULL;
 }
 
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
@@ -294,21 +285,6 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
         return gKVP_ProfileInstance;
     }
 
-    /*
-     * Compatibility: if the legacy global was already initialized elsewhere in
-     * the process (some harnesses do this), reuse it as our singleton.
-     *
-     * This directly addresses VTS logs showing:
-     *  - ut_kvp_getListCount(ut_kvp_profile_getInstance(), ...) => Invalid Handle
-     * by ensuring getInstance never returns a NULL/invalid handle when a valid
-     * legacy instance exists.
-     */
-    if (isValidKvpInstanceNoLog(gKVP_Instance))
-    {
-        gKVP_ProfileInstance = gKVP_Instance;
-        return gKVP_ProfileInstance;
-    }
-
     UT_LOG_DEBUG("ut_kvp_profile_getInstance: singleton not initialized; attempting auto-load");
 
     /*
@@ -320,13 +296,6 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     if (!emptyInst)
     {
         UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to allocate instance (OOM); using emergency instance");
-
-        /* If some other TU/DSO already has a valid legacy instance, prefer it. */
-        if (isValidKvpInstanceNoLog(gKVP_Instance))
-        {
-            gKVP_ProfileInstance = gKVP_Instance;
-            return gKVP_ProfileInstance;
-        }
         /*
          * Last resort: return NULL. Callers like ut_kvp_getListCount() have
          * their own recovery path to the profile singleton and will handle
@@ -374,7 +343,8 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
 
     /*
      * Last resort: load a minimal embedded boot profile so callers never see
-     * a NULL/invalid handle (prevents "Invalid Handle" failures in VTS).
+     * a NULL/invalid handle AND the keys used by VTS_L1_BOOT are guaranteed
+     * to exist (prevents listCount==0 and "Invalid Handle" failures in VTS).
      */
     ut_kvp_status_t st = ut_kvp_profile_loadFromMemory(kEmbeddedBootProfileYaml);
     if (st == UT_KVP_STATUS_SUCCESS)
