@@ -31,9 +31,12 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void);
 /**
  * Return the global profile instance.
  *
- * If no instance has been loaded yet and the environment variable
- * UT_KVP_PROFILE_PATH is set, this function will lazily load the profile from
- * that YAML file.
+ * If no instance has been loaded yet, this function will attempt to
+ * auto-load a profile in this order:
+ *  - UT_KVP_PROFILE_DATA (YAML payload as a string)
+ *  - UT_KVP_PROFILE_PATH (path to a YAML profile)
+ *  - a small set of conventional default paths (exe-relative and common locations)
+ *  - an embedded minimal boot profile (last-resort fallback for VTS harnesses)
  *
  * @return ut_kvp_instance_t* valid instance on success, or NULL on failure.
  */

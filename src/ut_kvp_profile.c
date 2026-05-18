@@ -342,22 +342,19 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
      * Last resort: load a minimal embedded boot profile so callers never see
      * a NULL/invalid handle (prevents "Invalid Handle" failures in VTS).
      */
+    ut_kvp_status_t st = ut_kvp_profile_loadFromMemory(kEmbeddedBootProfileYaml);
+    if (st == UT_KVP_STATUS_SUCCESS)
     {
-        /*
-         * Try to load into the already-created singleton via the normal loader
-         * (which replaces the instance). If this fails (e.g., strdup failure),
-         * still return the empty singleton so the handle remains valid.
-         */
-        ut_kvp_status_t st = ut_kvp_profile_loadFromMemory(kEmbeddedBootProfileYaml);
-        if (st == UT_KVP_STATUS_SUCCESS)
-        {
-            UT_LOG_DEBUG("ut_kvp_profile_getInstance: loaded embedded minimal boot profile (fallback)");
-        }
-        else
-        {
-            UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to load embedded fallback profile; returning empty instance");
-        }
+        UT_LOG_DEBUG("ut_kvp_profile_getInstance: loaded embedded minimal boot profile (fallback)");
+        return gKVP_ProfileInstance;
     }
+
+    /*
+     * If even the embedded profile can't be loaded (e.g. OOM), return the
+     * already-created empty instance. This preserves handle validity (magic),
+     * but list counts will be 0.
+     */
+    UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to load embedded fallback profile; returning empty instance");
 
     return gKVP_ProfileInstance;
 }
