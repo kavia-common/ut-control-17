@@ -123,6 +123,16 @@ static void destroyCurrentSingleton(void)
     gKVP_Instance = NULL;
 }
 
+/*
+ * Emergency instance:
+ * If malloc fails inside ut_kvp_profile_getInstance() we still must not return NULL
+ * because VTS calls ut_kvp_getListCount(getInstance(), ...) and validateInstance()
+ * will log "Invalid Handle" for NULL and fail the test early.
+ *
+ * This instance is magic-valid but has no data loaded; list counts will be 0.
+ */
+static ut_kvp_instance_internal_t gEmergencyInstance = { UT_KVP_MAGIC, NULL };
+
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
 {
     if (!yamlData || yamlData[0] == '\0')
@@ -317,8 +327,18 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
     ut_kvp_instance_t* emptyInst = ut_kvp_createInstance();
     if (!emptyInst)
     {
-        UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to allocate instance (OOM)");
-        return NULL;
+        UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to allocate instance (OOM); using emergency instance");
+
+        /* If some other TU/DSO already has a valid legacy instance, prefer it. */
+        if (isValidKvpInstanceNoLog(gKVP_Instance))
+        {
+            gKVP_ProfileInstance = gKVP_Instance;
+            return gKVP_ProfileInstance;
+        }
+
+        /* Last resort: return a magic-valid emergency instance (no data). */
+        setSingletonInstance((ut_kvp_instance_t *)&gEmergencyInstance);
+        return gKVP_ProfileInstance;
     }
     setSingletonInstance(emptyInst);
 

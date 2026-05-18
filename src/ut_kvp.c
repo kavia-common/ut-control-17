@@ -43,7 +43,13 @@
  */
 #include "ut_kvp_profile.h"
 
-ut_kvp_instance_t *gKVP_Instance = NULL;
+/*
+ * NOTE: This global is used for backward compatibility. In some harnesses (notably
+ * VTS or plugin-style link models), multiple copies of ut-control may be present.
+ * Marking it weak reduces the risk of duplicate-definition conflicts and allows
+ * the profile singleton TU to interoperate more safely.
+ */
+ut_kvp_instance_t *gKVP_Instance __attribute__((weak)) = NULL;
 
 #define UT_KVP_MAGIC (0xdeadbeef)
 #define UT_KVP_MAX_INCLUDE_DEPTH 5
