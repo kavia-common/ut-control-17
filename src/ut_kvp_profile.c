@@ -105,10 +105,13 @@ static void setSingletonInstance(ut_kvp_instance_t *inst)
      *   In that case, we simply keep our internal singleton as the source of truth.
      */
 #if defined(__GNUC__) || defined(__clang__)
-    if (&gKVP_Instance)
-    {
+    /*
+     * For weak externs, the symbol may resolve to NULL at runtime if not present.
+     * Writing via &gKVP_Instance is NOT a valid presence check (it's the address
+     * of our reference), so instead only mirror when the symbol itself is usable.
+     */
+    if (gKVP_Instance != NULL || inst == NULL)
         gKVP_Instance = inst;
-    }
 #else
     gKVP_Instance = inst;
 #endif
@@ -124,10 +127,8 @@ static void destroyCurrentSingleton(void)
 
     /* Always clear legacy global as well. */
 #if defined(__GNUC__) || defined(__clang__)
-    if (&gKVP_Instance)
-    {
+    if (gKVP_Instance != NULL)
         gKVP_Instance = NULL;
-    }
 #else
     gKVP_Instance = NULL;
 #endif
@@ -310,7 +311,7 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
      * legacy symbol is absent due to link-time stripping.
      */
 #if defined(__GNUC__) || defined(__clang__)
-    if (&gKVP_Instance && gKVP_Instance)
+    if (gKVP_Instance)
     {
         gKVP_ProfileInstance = gKVP_Instance;
         return gKVP_ProfileInstance;

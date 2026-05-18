@@ -216,11 +216,7 @@ ut_kvp_status_t ut_kvp_openMemory(ut_kvp_instance_t *pInstance, char *pData, uin
         return UT_KVP_STATUS_PARSING_ERROR;
     }
 
-    if (pInternal->fy_handle)
-    {
-        merge_nodes(fy_document_root(pInternal->fy_handle), fy_document_root(srcDoc));
-    }
-    else
+    if (!pInternal->fy_handle)
     {
         pInternal->fy_handle = fy_document_create(NULL);
         if (NULL == pInternal->fy_handle)
@@ -230,6 +226,17 @@ ut_kvp_status_t ut_kvp_openMemory(ut_kvp_instance_t *pInstance, char *pData, uin
             fy_document_destroy(srcDoc);
             return UT_KVP_STATUS_PARSING_ERROR;
         }
+    }
+
+    /*
+     * Only merge when both documents have a root. Merging NULL roots can lead to
+     * invalid internal state and later lookup failures.
+     */
+    {
+        struct fy_node *dstRoot = fy_document_root(pInternal->fy_handle);
+        struct fy_node *srcRoot = fy_document_root(srcDoc);
+        if (dstRoot && srcRoot)
+            merge_nodes(dstRoot, srcRoot);
     }
 
     struct fy_node *srcNode = fy_document_root(srcDoc);
