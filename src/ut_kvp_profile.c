@@ -6,6 +6,14 @@
  *   source for expected capability lists (e.g., boot supportedResetTypes).
  * - The base ut_kvp API is instance-based; this file provides a safe singleton
  *   wrapper so callers can rely on a shared instance when desired.
+ *
+ * Robustness note:
+ * - Some harnesses (notably certain VTS builds) may end up calling
+ *   ut_kvp_profile_getInstance() without having a profile loaded, and in some
+ *   builds/linkage models the legacy global gKVP_Instance may not be reliably
+ *   initialized by the harness itself.
+ * - To avoid NULL/invalid handle failures, this module maintains its own
+ *   singleton pointer and keeps the legacy gKVP_Instance symbol in sync.
  */
 
 #include "ut_kvp_profile.h"
@@ -16,7 +24,17 @@
 
 #include <ut_log.h>
 
+/*
+ * Legacy global instance symbol defined in ut_kvp.c.
+ * We keep it synchronized for backward compatibility.
+ */
 extern ut_kvp_instance_t *gKVP_Instance;
+
+/*
+ * Internal singleton instance pointer owned by this TU.
+ * This is the canonical instance for ut_kvp_profile_* APIs.
+ */
+static ut_kvp_instance_t *gKVP_ProfileInstance = NULL;
 
 /**
  * Minimal embedded profile used as a last-resort fallback when no on-disk
@@ -63,6 +81,28 @@ static const char* getProfilePathFromEnv(void)
     return NULL;
 }
 
+static void setSingletonInstance(ut_kvp_instance_t *inst)
+{
+    /*
+     * Single point of truth for updating our internal singleton and mirroring
+     * to the legacy global. This reduces the risk of the two getting out-of-sync.
+     */
+    gKVP_ProfileInstance = inst;
+    gKVP_Instance = inst;
+}
+
+static void destroyCurrentSingleton(void)
+{
+    if (gKVP_ProfileInstance)
+    {
+        ut_kvp_destroyInstance(gKVP_ProfileInstance);
+        gKVP_ProfileInstance = NULL;
+    }
+
+    /* Always clear legacy global as well. */
+    gKVP_Instance = NULL;
+}
+
 static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
 {
     if (!yamlData || yamlData[0] == '\0')
@@ -78,7 +118,7 @@ static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
         return UT_KVP_STATUS_PARSING_ERROR;
     }
 
-    // ut_kvp_openMemory takes mutable char*
+    /* ut_kvp_openMemory takes mutable char* */
     char* mutableData = strdup(yamlData);
     if (!mutableData)
     {
@@ -96,13 +136,8 @@ static ut_kvp_status_t ut_kvp_profile_loadFromMemory(const char* yamlData)
         return st;
     }
 
-    if (gKVP_Instance)
-    {
-        ut_kvp_destroyInstance(gKVP_Instance);
-        gKVP_Instance = NULL;
-    }
-
-    gKVP_Instance = inst;
+    destroyCurrentSingleton();
+    setSingletonInstance(inst);
     return UT_KVP_STATUS_SUCCESS;
 }
 
@@ -114,7 +149,7 @@ static ut_kvp_status_t tryLoadFromDefaultPaths(void)
     if (exeLen > 0)
     {
         exePath[exeLen] = '\0';
-        // Derive directory in-place (no libgen dependency).
+        /* Derive directory in-place (no libgen dependency). */
         strncpy(exeDir, exePath, sizeof(exeDir) - 1);
         exeDir[sizeof(exeDir) - 1] = '\0';
         char *lastSlash = strrchr(exeDir, '/');
@@ -140,7 +175,7 @@ static ut_kvp_status_t tryLoadFromDefaultPaths(void)
         snprintf(exeProfile4, sizeof(exeProfile4), "%s/%s", exeDir, "assets/ut_kvp_profile.yaml");
     }
 
-    // Common locations used by various test harnesses when env vars are not propagated.
+    /* Common locations used by various test harnesses when env vars are not propagated. */
     static const char* kDefaultPaths[] = {
         "profile.yaml",
         "assets/profile.yaml",
@@ -148,17 +183,17 @@ static ut_kvp_status_t tryLoadFromDefaultPaths(void)
         "configs/profile.yaml",
         "ut_kvp_profile.yaml",
         "assets/ut_kvp_profile.yaml",
-        // Common device/VTS style locations
+        /* Common device/VTS style locations */
         "/vendor/etc/ut_kvp_profile.yaml",
         "/vendor/etc/profile.yaml",
         "/etc/ut_kvp_profile.yaml",
         "/etc/profile.yaml",
-        // Common workspace-style locations used by some harnesses
+        /* Common workspace-style locations used by some harnesses */
         "tests/src/assets/config-test.yaml",
         "tests/assets/config-test.yaml",
     };
 
-    // First: try alongside the running binary (typical for VTS packaging).
+    /* First: try alongside the running binary (typical for VTS packaging). */
     if (exeDir[0] != '\0')
     {
         const char *exeCandidates[] = { exeProfile1, exeProfile2, exeProfile3, exeProfile4 };
@@ -186,6 +221,7 @@ static ut_kvp_status_t tryLoadFromDefaultPaths(void)
             return st;
         }
     }
+
     return UT_KVP_STATUS_FILE_OPEN_ERROR;
 }
 
@@ -204,7 +240,7 @@ ut_kvp_status_t ut_kvp_profile_loadFromFile(const char* filePath)
         return UT_KVP_STATUS_PARSING_ERROR;
     }
 
-    // ut_kvp_open takes mutable char*
+    /* ut_kvp_open takes mutable char* */
     char* mutablePath = strdup(filePath);
     if (!mutablePath)
     {
@@ -222,35 +258,43 @@ ut_kvp_status_t ut_kvp_profile_loadFromFile(const char* filePath)
         return st;
     }
 
-    // Replace any existing singleton instance.
-    if (gKVP_Instance)
-    {
-        ut_kvp_destroyInstance(gKVP_Instance);
-        gKVP_Instance = NULL;
-    }
-
-    gKVP_Instance = inst;
+    /* Replace any existing singleton instance. */
+    destroyCurrentSingleton();
+    setSingletonInstance(inst);
     return UT_KVP_STATUS_SUCCESS;
 }
 
 ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
 {
+    /* Prefer internal singleton first. */
+    if (gKVP_ProfileInstance)
+    {
+        return gKVP_ProfileInstance;
+    }
+
+    /*
+     * If someone initialized the legacy global directly (outside this module),
+     * adopt it so we can still serve a valid instance.
+     */
     if (gKVP_Instance)
     {
-        return gKVP_Instance;
+        gKVP_ProfileInstance = gKVP_Instance;
+        return gKVP_ProfileInstance;
     }
 
     UT_LOG_DEBUG("ut_kvp_profile_getInstance: singleton not initialized; attempting auto-load");
 
-    // Lazy-load from env if available. This prevents common "Invalid Handle"
-    // failures in integration tests that expect the singleton to exist.
+    /*
+     * Lazy-load from env if available. This prevents common "Invalid Handle"
+     * failures in integration tests that expect the singleton to exist.
+     */
     const char* envData = getProfileDataFromEnv();
     if (envData)
     {
         ut_kvp_status_t st = ut_kvp_profile_loadFromMemory(envData);
         if (st == UT_KVP_STATUS_SUCCESS)
         {
-            return gKVP_Instance;
+            return gKVP_ProfileInstance;
         }
         UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to auto-load UT_KVP_PROFILE_DATA");
     }
@@ -261,27 +305,31 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
         ut_kvp_status_t st = ut_kvp_profile_loadFromFile(envPath);
         if (st == UT_KVP_STATUS_SUCCESS)
         {
-            return gKVP_Instance;
+            return gKVP_ProfileInstance;
         }
         UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to auto-load UT_KVP_PROFILE_PATH='%s'", envPath);
     }
 
-    // Final fallback: attempt a small set of conventional relative paths.
-    // This is intended for VTS/CI harnesses that ship the profile next to the test binary
-    // but do not propagate environment variables.
+    /*
+     * Final fallback: attempt a small set of conventional relative paths.
+     * This is intended for VTS/CI harnesses that ship the profile next to the test binary
+     * but do not propagate environment variables.
+     */
     if (tryLoadFromDefaultPaths() == UT_KVP_STATUS_SUCCESS)
     {
-        return gKVP_Instance;
+        return gKVP_ProfileInstance;
     }
 
-    // Last resort: load a minimal embedded boot profile so callers never see
-    // a NULL/invalid handle (prevents "Invalid Handle" failures in VTS).
+    /*
+     * Last resort: load a minimal embedded boot profile so callers never see
+     * a NULL/invalid handle (prevents "Invalid Handle" failures in VTS).
+     */
     {
         ut_kvp_status_t st = ut_kvp_profile_loadFromMemory(kEmbeddedBootProfileYaml);
         if (st == UT_KVP_STATUS_SUCCESS)
         {
             UT_LOG_DEBUG("ut_kvp_profile_getInstance: loaded embedded minimal boot profile (fallback)");
-            return gKVP_Instance;
+            return gKVP_ProfileInstance;
         }
         UT_LOG_ERROR("ut_kvp_profile_getInstance: failed to load embedded fallback profile");
     }
@@ -291,9 +339,5 @@ ut_kvp_instance_t* ut_kvp_profile_getInstance(void)
 
 void ut_kvp_profile_release(void)
 {
-    if (gKVP_Instance)
-    {
-        ut_kvp_destroyInstance(gKVP_Instance);
-        gKVP_Instance = NULL;
-    }
+    destroyCurrentSingleton();
 }
