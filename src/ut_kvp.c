@@ -211,6 +211,7 @@ ut_kvp_status_t ut_kvp_openMemory(ut_kvp_instance_t *pInstance, char *pData, uin
     if(fy_document_resolve(srcDoc) != 0)
     {
         UT_LOG_ERROR("Error resolving document for anchors, aliases and merge keys");
+        free(cData);
         ut_kvp_close(pInstance);
         return UT_KVP_STATUS_PARSING_ERROR;
     }
@@ -239,11 +240,13 @@ ut_kvp_status_t ut_kvp_openMemory(ut_kvp_instance_t *pInstance, char *pData, uin
         UT_LOG_ERROR("Unable to process node");
         ut_kvp_close(pInstance);
         fy_document_destroy(srcDoc);
+        free(cData);
         return UT_KVP_STATUS_PARSING_ERROR;
     }
 
     fy_document_set_root(pInternal->fy_handle, node);
     fy_document_destroy(srcDoc);
+    free(cData);
 
     return UT_KVP_STATUS_SUCCESS;
 }
