@@ -286,15 +286,20 @@ build_curl()
 {
     cd ${CURL_DIR}
     mkdir -p ${CURL_BUILD_DIR}
+    # If curl was previously configured with different features, ensure we
+    # reconfigure from a clean state.
+    if [ -f "Makefile" ]; then
+        make distclean >/dev/null 2>&1 || true
+    fi
     if [ "$TARGET" = "arm" ]; then
         # For arm
-        ./configure CPPFLAGS="-I${OPENSSL_BUILD_DIR}/include" LDFLAGS="-L${OPENSSL_BUILD_DIR}/lib" --prefix=${CURL_BUILD_DIR} --host=arm --with-ssl=${OPENSSL_BUILD_DIR} --with-pic --without-libpsl --without-libidn2 --disable-docs --disable-libcurl-option --disable-alt-svc --disable-headers-api --disable-hsts --without-libgsasl --without-zlib
+        ./configure CPPFLAGS="-I${OPENSSL_BUILD_DIR}/include" LDFLAGS="-L${OPENSSL_BUILD_DIR}/lib" --prefix=${CURL_BUILD_DIR} --host=arm --with-ssl=${OPENSSL_BUILD_DIR} --with-pic --without-libpsl --without-libidn2 --disable-docs --disable-libcurl-option --disable-alt-svc --disable-headers-api --disable-hsts --without-libgsasl --without-zlib --without-brotli
     else
         # For linux
         if [ "$OPENSSL_IS_SYSTEM_INSTALLED" -eq 1 ]; then
-            ./configure --prefix=${CURL_BUILD_DIR} --with-ssl --without-zlib --without-libpsl --without-libidn2 --disable-docs --disable-libcurl-option --disable-alt-svc --disable-headers-api --disable-hsts --without-libgsasl
+            ./configure --prefix=${CURL_BUILD_DIR} --with-ssl --without-zlib --without-libpsl --without-libidn2 --disable-docs --disable-libcurl-option --disable-alt-svc --disable-headers-api --disable-hsts --without-libgsasl --without-brotli
         else
-            ./configure CPPFLAGS="-I${OPENSSL_BUILD_DIR}/include" LDFLAGS="-L${OPENSSL_BUILD_DIR}/lib" --prefix=${CURL_BUILD_DIR} --with-ssl=${OPENSSL_BUILD_DIR} --with-pic --without-zlib --without-libpsl --without-libidn2 --disable-docs --disable-libcurl-option --disable-alt-svc --disable-headers-api --disable-hsts --without-libgsasl
+            ./configure CPPFLAGS="-I${OPENSSL_BUILD_DIR}/include" LDFLAGS="-L${OPENSSL_BUILD_DIR}/lib" --prefix=${CURL_BUILD_DIR} --with-ssl=${OPENSSL_BUILD_DIR} --with-pic --without-zlib --without-libpsl --without-libidn2 --disable-docs --disable-libcurl-option --disable-alt-svc --disable-headers-api --disable-hsts --without-libgsasl --without-brotli
         fi
     fi
     make $@; make $@ install
@@ -305,7 +310,26 @@ if [ "${LIBCURL_IS_SYSTEM_INSTALLED}" -eq 0 ]; then
     if [ -d "${CURL_DIR}" ]; then
         echo "Framework [curl] already exists"
         if [ -f "${CURL_BUILD_DIR}/.build_complete" ]; then
-            echo "Framework [curl] already built for ${TARGET}"
+            # If curl was previously built with Brotli enabled, it will introduce
+            # BrotliDecoder* undefined references when linking libut_control.so
+            # against static libcurl.a. Rebuild curl with --without-brotli.
+            NEED_REBUILD_CURL=0
+            CURL_PC_FILE="${CURL_BUILD_DIR}/lib/pkgconfig/libcurl.pc"
+            if [ -f "${CURL_PC_FILE}" ] && grep -qi "brotli" "${CURL_PC_FILE}"; then
+                NEED_REBUILD_CURL=1
+            fi
+            if [ "${NEED_REBUILD_CURL}" -eq 0 ] && command -v nm >/dev/null 2>&1; then
+                if nm -g "${CURL_BUILD_DIR}/lib/libcurl.a" 2>/dev/null | grep -q "BrotliDecoder"; then
+                    NEED_REBUILD_CURL=1
+                fi
+            fi
+            if [ "${NEED_REBUILD_CURL}" -eq 1 ]; then
+                echo "Framework [curl] was built with Brotli support; rebuilding without Brotli"
+                rm -f "${CURL_BUILD_DIR}/.build_complete"
+                build_curl
+            else
+                echo "Framework [curl] already built for ${TARGET}"
+            fi
         else
             build_curl
         fi
