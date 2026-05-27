@@ -74,6 +74,20 @@ else
 XLDFLAGS += -lcurl
 endif
 
+# Brotli Requirements
+# Some curl builds (notably static libcurl.a) may be built with Brotli support enabled.
+# In that case, linking a shared library against libcurl.a also requires explicitly
+# linking Brotli decoder libs to satisfy symbols like BrotliDecoderCreateInstance().
+#
+# We only add Brotli libs if they are available on the build host / sysroot.
+BROTLILIBS := $(shell pkg-config --libs libbrotlidec 2>/dev/null)
+ifeq ($(strip $(BROTLILIBS)),)
+ifneq ($(firstword $(wildcard /usr/lib*/libbrotlidec.so* /usr/lib/*/libbrotlidec.so* /usr/local/lib*/libbrotlidec.so* /usr/local/lib/*/libbrotlidec.so* /lib*/libbrotlidec.so* /lib/*/libbrotlidec.so* /usr/lib*/libbrotlidec.a /usr/lib/*/libbrotlidec.a /usr/local/lib*/libbrotlidec.a /usr/local/lib/*/libbrotlidec.a)),)
+BROTLILIBS := -lbrotlidec -lbrotlicommon
+endif
+endif
+XLDFLAGS += $(BROTLILIBS)
+
 # UT Control library Requirements
 SRC_DIRS += ${TOP_DIR}/src
 INC_DIRS += ${TOP_DIR}/include
