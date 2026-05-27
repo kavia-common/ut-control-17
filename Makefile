@@ -80,13 +80,12 @@ endif
 # linking Brotli decoder libs to satisfy symbols like BrotliDecoderCreateInstance().
 #
 # We only add Brotli libs if they are available on the build host / sysroot.
-BROTLILIBS := $(shell pkg-config --libs libbrotlidec 2>/dev/null)
+BROTLILIBS := $(shell pkg-config --static --libs libbrotlidec 2>/dev/null)
 ifeq ($(strip $(BROTLILIBS)),)
 ifneq ($(firstword $(wildcard /usr/lib*/libbrotlidec.so* /usr/lib/*/libbrotlidec.so* /usr/local/lib*/libbrotlidec.so* /usr/local/lib/*/libbrotlidec.so* /lib*/libbrotlidec.so* /lib/*/libbrotlidec.so* /usr/lib*/libbrotlidec.a /usr/lib/*/libbrotlidec.a /usr/local/lib*/libbrotlidec.a /usr/local/lib/*/libbrotlidec.a)),)
 BROTLILIBS := -lbrotlidec -lbrotlicommon
 endif
 endif
-XLDFLAGS += $(BROTLILIBS)
 
 # UT Control library Requirements
 SRC_DIRS += ${TOP_DIR}/src
@@ -117,6 +116,13 @@ else
 # Commands to run if the directory does not exist
 XLDFLAGS += -lssl -lcrypto
 endif
+endif
+
+# If Brotli libs are present, force them to be considered at link time even when
+# the toolchain enables --as-needed by default. Keeping this at the end helps
+# satisfy symbols pulled in from static libcurl.a.
+ifneq ($(strip $(BROTLILIBS)),)
+XLDFLAGS += -Wl,--no-as-needed $(BROTLILIBS) -Wl,--as-needed
 endif
 
 # Defaults for target linux
